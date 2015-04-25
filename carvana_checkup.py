@@ -13,43 +13,62 @@ class Carvana(object):
         'Content-Type': 'application/json'
     }
 
-    def search(self):
+    def search(self, model, year_min=None, year_max=None):
         data = json.dumps({
-            'BodyStyle': [],
             'Color': [],
             'DownPayment': None,
             'DriveTrain': [],
             'Features': None,
             'FilterToExclude': None,
             'MileageMax': None,
-            'Models': 'a_',
+            'Models': model,
             'MonthlyPayment': None,
             'Page': 1,
             'PriceMax': None,
             'PriceMin': None,
-            'SortBy': "Newest",
-            'YearMax': 2014,
-            'YearMin': 2012,
+            'SortBy': 'Newest',
+            'YearMax': year_max,
+            'YearMin': year_min,
         })
 
         response = requests.post(
             self.search_url,
             headers=self.search_headers,
-            data=data)
+            data=data
+        )
 
         response.raise_for_status()
         return response.json()['results']
 
 
+def get_pk(car):
+    return str(car['StockNumber'])
+
+
 def main():
-
     carvana = Carvana()
-    results = carvana.search()
+    db = shelve.open('carvana.db')
 
-    print 'Number of results:', len(results)
+    cars = carvana.search(MODEL)
+    new_cars = [c for c in cars if get_pk(c) not in db]
 
-    for result in results:
-        print result['StockNumber']
+    print 'Found', len(cars), 'total cars.'
+    print 'Found', len(new_cars), 'new cars.'
+
+    for car in new_cars:
+        make = car['Make']
+        model = car['Model']
+        year = car['Year']
+        mileage = str(car['Mileage']) + 'mi'
+        price = car['FormattedPrice']
+
+        print make, model, year, mileage, price
+
+    for car in cars:
+        db[get_pk(car)] = car
+
+    db.close()
+
 
 if __name__ == '__main__':
     main()
