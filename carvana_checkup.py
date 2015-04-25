@@ -1,10 +1,10 @@
+import sys
 import shelve
 import json
+import smtplib
 import requests
-
-# TODO: how to do notifications?
-
-MODEL = 'a_'
+import yaml
+from email.mime.text import MIMEText
 
 
 class Carvana(object):
@@ -41,28 +41,77 @@ class Carvana(object):
         return response.json()['results']
 
 
+class Mailer(object):
+    def __init__(self, host, port, ssl, username, password):
+        self.host = host
+        self.port = port
+        self.ssl = ssl
+        self.username = username
+        self.password = password
+
+    def connect(self):
+        if self.ssl:
+            self.server = smtplib.SMTP_SSL(self.host, self.port)
+        else:
+            self.server = smtplib.SMTP(self.host, self.port)
+
+        self.server.login(self.username, self.password)
+
+    def send(self, to_addrs, subject, body):
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['From'] = self.username
+        msg['To'] = to_addrs
+        self.server.sendmail(self.username, to_addrs, msg.as_string())
+
+    def quit(self):
+        self.server.quit()
+
+
 def get_pk(car):
     return str(car['StockNumber'])
 
 
-def main():
-    carvana = Carvana()
-    db = shelve.open('carvana.db')
+def render_subject(cars):
+    return 'Found %d new cars!' % len(cars)
 
-    cars = carvana.search(MODEL)
+
+def render_body(cars):
+    lines = []
+    line = '{Make} {Model} {Year} {TrimLine2} {Mileage}mi {FormattedPrice}'
+
+    for car in cars:
+        lines.append(line.format(**car))
+
+    lines = '\n'.join(lines)
+    print lines
+
+    return lines
+
+
+def send_notification(config, cars):
+    if not cars:
+        return
+
+    mailer = Mailer(**config['email'])
+    subject = render_subject(cars)
+    body = render_body(cars)
+
+    mailer.connect()
+    mailer.send(config['notifiy_email'], subject, body)
+    mailer.quit()
+
+
+def main(config):
+    carvana = Carvana()
+    db = shelve.open(config['database'])
+
+    cars = carvana.search(**config['search'])
     new_cars = [c for c in cars if get_pk(c) not in db]
 
     print 'Found', len(cars), 'total cars.'
     print 'Found', len(new_cars), 'new cars.'
-
-    for car in new_cars:
-        make = car['Make']
-        model = car['Model']
-        year = car['Year']
-        mileage = str(car['Mileage']) + 'mi'
-        price = car['FormattedPrice']
-
-        print make, model, year, mileage, price
+    send_notification(config, cars)
 
     for car in cars:
         db[get_pk(car)] = car
@@ -71,4 +120,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) != 2:
+        print 'Usage: %s <config>' % sys.argv[0]
+        sys.exit(1)
+
+    with open(sys.argv[1]) as fp:
+        main(yaml.load(fp))
