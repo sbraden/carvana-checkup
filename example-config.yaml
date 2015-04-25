@@ -1,0 +1,14 @@
+database: carvana.db
+notifiy_email: example@gmail.com
+
+search:
+    model: a_
+    year_min: 2013
+    year_max: null
+
+email:
+    host: smtp.gmail.com
+    port: 465
+    ssl: true
+    username: example@gmail.com
+    password: password
