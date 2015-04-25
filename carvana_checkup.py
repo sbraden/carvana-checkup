@@ -111,7 +111,7 @@ def main(config):
 
     print 'Found', len(cars), 'total cars.'
     print 'Found', len(new_cars), 'new cars.'
-    send_notification(config, cars)
+    send_notification(config, new_cars)
 
     for car in cars:
         db[get_pk(car)] = car
